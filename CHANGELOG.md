@@ -1,3 +1,10 @@
+## [1.16.1](https://github.com/CoCreate-app/CoCreate-authorize/compare/v1.16.0...v1.16.1) (2025-04-30)
+
+
+### Bug Fixes
+
+* webpack.config and devdependencies ([7675592](https://github.com/CoCreate-app/CoCreate-authorize/commit/7675592a7098b5141e39837c5bde0eee2ab3a3a3))
+
 # [1.16.0](https://github.com/CoCreate-app/CoCreate-authorize/compare/v1.15.0...v1.16.0) (2024-12-09)
 
 
