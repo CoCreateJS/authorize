@@ -1,3 +1,10 @@
+## [1.16.2](https://github.com/CoCreate-app/CoCreate-authorize/compare/v1.16.1...v1.16.2) (2025-05-01)
+
+
+### Bug Fixes
+
+* update [@cocreate](https://github.com/cocreate) dependencies ([77cb963](https://github.com/CoCreate-app/CoCreate-authorize/commit/77cb96368407244f50b1432b3d2a0161dcaef5ac))
+
 ## [1.16.1](https://github.com/CoCreate-app/CoCreate-authorize/compare/v1.16.0...v1.16.1) (2025-04-30)
 
 
