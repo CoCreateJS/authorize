@@ -183,32 +183,39 @@
 					array: "keys", // Collection or array to query
 					organization_id, // Organization context for the request
 					$filter: {
-						query: {} // Query filters to apply
+						query: {}, // Query filters to apply
+						limit: 2 // Limit to 2 results to fetch both default and specific key if needed
 					}
 				};
 
-				// Add query filters based on the key or default authorization
-				if (key) request.$filter.query.key = key;
-				else request.$filter.query.default = true;
+				// Always fetch the default authorization and, if provided, the specific key
+				request.$filter.query.$or = [{ default: true }];
+				if (key) request.$filter.query.$or.push({ key: key });
 
 				// Send the request to the CRUD layer
-				let authorization = await crud.send(request);
+				let authRes = await crud.send(request);
 
-				// If authorization data exists, process the roles and permissions
-				if (
-					authorization &&
-					authorization.object &&
-					authorization.object[0]
-				) {
-					authorization = authorization.object[0];
+				// If authorization data exists, merge default + key (key overrides default)
+				if (authRes && authRes.object && authRes.object.length) {
+					const objs = authRes.object;
+					const defaultDoc = objs.find((o) => o && o.default) || {};
+					const keyDoc = key ? objs.find((o) => o && o.key === key) : undefined;
+
+					// Expand dot-notation fields and merge: defaults then key-specific (key overrides)
+					const expandedDefault = dotNotationToObject({}, defaultDoc || {});
+					const expandedKey = keyDoc ? dotNotationToObject({}, keyDoc) : {};
+					let authorization = dotNotationToObject(expandedDefault, expandedKey);
+
+					// Merge roles uniquely (default roles + key roles)
+					const defaultRoles = defaultDoc.roles || [];
+					const keyRoles = (keyDoc && keyDoc.roles) || [];
+					authorization.roles = Array.from(new Set([...defaultRoles, ...keyRoles]));
 
 					// Ensure the 'arrays' field exists to prevent undefined references
-					if (!authorization.arrays) {
-						authorization.arrays = {};
-					}
+					if (!authorization.arrays) authorization.arrays = {};
 
-					// Process roles associated with the authorization
-					if (authorization && authorization.roles) {
+					// Process roles associated with the authorization (if any)
+					if (authorization && authorization.roles && authorization.roles.length) {
 						const role_ids = [];
 						authorization.roles.forEach((_id) => {
 							if (_id) role_ids.push({ _id });
@@ -225,13 +232,11 @@
 						roles = roles.object;
 
 						for (let role of roles) {
-							authorization = dotNotationToObject(
-								authorization,
-								role
-							);
+							authorization = dotNotationToObject(authorization, role);
 						}
 					}
-					return authorization; // Return the final authorization object
+
+					return authorization; // Return the final merged authorization object
 				} else {
 					// Return an empty object if no authorization is found
 					return {};
