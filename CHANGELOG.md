@@ -1,3 +1,14 @@
+## [1.16.3](https://github.com/CoCreate-app/CoCreate-authorize/compare/v1.16.2...v1.16.3) (2026-07-14)
+
+
+### Bug Fixes
+
+* enhance authorization merging logic to handle default and specific keys ([a7288a3](https://github.com/CoCreate-app/CoCreate-authorize/commit/a7288a31b337adc028199d22c14c160b956b8442))
+* remove package-lock.json to streamline dependency management ([d94d17f](https://github.com/CoCreate-app/CoCreate-authorize/commit/d94d17fecf1682545baa9010b0d9001d6f22f23c))
+* removed post install ([90f2717](https://github.com/CoCreate-app/CoCreate-authorize/commit/90f2717c6189adca81ee275c0c983bac4cb9354c))
+* semantic version handling. Reorganize .gitignore for improved clarity and structure ([a714064](https://github.com/CoCreate-app/CoCreate-authorize/commit/a71406414165e6a1106f4c8927d7951779f69065))
+* update module export to ES6 syntax in release.config.js ([1b8726e](https://github.com/CoCreate-app/CoCreate-authorize/commit/1b8726e21110c3f877200532f32cce56d66e85ba))
+
 ## [1.16.2](https://github.com/CoCreate-app/CoCreate-authorize/compare/v1.16.1...v1.16.2) (2025-05-01)
 
 
