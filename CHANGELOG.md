@@ -1,3 +1,10 @@
+# [1.17.0](https://github.com/CoCreate-app/CoCreate-authorize/compare/v1.16.3...v1.17.0) (2026-07-17)
+
+
+### Features
+
+* update automated workflow and release configuration for improved semantic release handling ([5323e02](https://github.com/CoCreate-app/CoCreate-authorize/commit/5323e021f213d0af852d78e20bb0ef8165bd5e00))
+
 ## [1.16.3](https://github.com/CoCreate-app/CoCreate-authorize/compare/v1.16.2...v1.16.3) (2026-07-14)
 
 
