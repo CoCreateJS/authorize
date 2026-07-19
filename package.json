@@ -1,16 +1,19 @@
 {
   "name": "@cocreate/authorize",
   "version": "1.17.2",
-  "description": "A simple authorize component in vanilla javascript. Easily configured using HTML5 data-attributes and/or JavaScript API.",
+  "description": "A secure, real-time multi-tenant authorization framework and permission evaluation engine featuring hierarchical dot-notation routing, dynamic query filter injection, and deep payload field sanitization.",
   "keywords": [
-    "authorize",
-    "low-code",
-    "realtime",
-    "realtime-framework",
-    "collaboration",
-    "shared-editing",
-    "html5-framework",
-    "javascript-framework"
+    "authorization",
+    "permission-engine",
+    "role-inheritance",
+    "data-sanitization",
+    "multi-tenant",
+    "cache-invalidation",
+    "query-filter-injection",
+    "field-level-security",
+    "access-control",
+    "rbac",
+    "abac"
   ],
   "publishConfig": {
     "access": "public"
