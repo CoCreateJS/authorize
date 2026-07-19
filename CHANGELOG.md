@@ -1,3 +1,10 @@
+## [1.17.3](https://github.com/CoCreate-app/CoCreate-authorize/compare/v1.17.2...v1.17.3) (2026-07-19)
+
+
+### Bug Fixes
+
+* update package description and keywords for clarity and accuracy ([cc9ae48](https://github.com/CoCreate-app/CoCreate-authorize/commit/cc9ae48c1c42e2f7c4bca9a2b10112888ea84547))
+
 ## [1.17.2](https://github.com/CoCreate-app/CoCreate-authorize/compare/v1.17.1...v1.17.2) (2026-07-19)
 
 
