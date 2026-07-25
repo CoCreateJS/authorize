@@ -18,9 +18,6 @@
 import { getValueFromObject, dotNotationToObject } from "@cocreate/utils";
 import crud from "@cocreate/crud-server";
 
-// ==========================================
-// Module-Level Sandbox State (ESM Singleton)
-// ==========================================
 const organizations = {};
 
 // ==========================================
