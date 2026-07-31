@@ -40,8 +40,8 @@
   "type": "module",
   "main": "./src/index.js",
   "dependencies": {
-    "@cocreate/crud-client": "^1.36.0",
-    "@cocreate/crud-server": "^1.40.0",
-    "@cocreate/utils": "^1.50.0"
+    "@cocreate/crud-client": "^1.36.1",
+    "@cocreate/crud-server": "^1.41.0",
+    "@cocreate/utils": "^1.52.0"
   }
 }
