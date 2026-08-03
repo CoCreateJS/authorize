@@ -653,4 +653,4 @@ function generateDotNotation(data, path, isExclusion = false) {
     return result;
 }
 
-export default check;
+export default { check };
