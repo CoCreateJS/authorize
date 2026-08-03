@@ -286,40 +286,53 @@ async function checkAuthorization({ key, data }) {
         return true;
     }
 
-    if (!authorized.actions) {
-        return { error: "Authorization does not have any actions defined" };
+    // Supports 'methods' as primary, with fallback to legacy 'actions'
+    const methods = authorized.methods || authorized.actions;
+    if (!methods) {
+        return { error: "Authorization does not have any methods or actions defined" };
     }
 
-    const status = await checkMethod(data, authorized.actions, data.method);
+    const status = await checkMethod(data, methods, data.method);
     if (!status) return false;
 
     return { authorized: data };
 }
 
 /**
- * Matches requested method against authorization rules using dot notation hierarchy.
+ * Matches requested method against authorization rules using hierarchical dot notation.
+ * Cascades down specific action hierarchies automatically (e.g. stripe.customers.subscriptions.delete
+ * -> stripe.customers.subscriptions -> stripe.customers -> stripe -> *).
  *
  * @param {object} data - Request data.
- * @param {object} authorized - Authorization actions tree.
- * @param {string} method - Method string (e.g. "object.read").
+ * @param {object} authorized - Authorization methods tree.
+ * @param {string} method - Method string (e.g. "stripe.customers.post" or "object.read").
  * @returns {Promise<boolean>}
  */
 async function checkMethod(data, authorized, method) {
-    if (authorized[method] !== undefined) {
-        return await checkMethodMatch(data, authorized[method], method);
+    if (!authorized || typeof authorized !== "object") return false;
+
+    // 1. Direct match on exact path (handles both flat dot-notated keys and deep object paths)
+    const directMatch = getValueFromObject(authorized, method) ?? authorized[method];
+    if (directMatch !== undefined) {
+        return await checkMethodMatch(data, directMatch, method);
     }
 
+    // 2. Cascading match up dot-notation hierarchy (e.g. "stripe.customers.post" -> "stripe.customers" -> "stripe")
     if (method.includes(".")) {
-        let match = "";
-        const splitMethod = method.split(".");
-
-        for (let i = 0; i < splitMethod.length; i++) {
-            match = match ? `${match}.${splitMethod[i]}` : splitMethod[i];
-
-            if (authorized[match] !== undefined) {
-                return await checkMethodMatch(data, authorized[match], match);
+        const parts = method.split(".");
+        while (parts.length > 1) {
+            parts.pop();
+            const parentPath = parts.join(".");
+            const parentMatch = getValueFromObject(authorized, parentPath) ?? authorized[parentPath];
+            if (parentMatch !== undefined) {
+                return await checkMethodMatch(data, parentMatch, parentPath);
             }
         }
+    }
+
+    // 3. Fallback to global wildcard "*"
+    if (authorized["*"] !== undefined) {
+        return await checkMethodMatch(data, authorized["*"], "*");
     }
 
     return false;
@@ -340,7 +353,7 @@ async function checkMethodMatch(data, authorized, match) {
         return boolVal;
     }
 
-    // String permission rule match (e.g. string matching exact method name)
+    // String permission rule match
     if (typeof authorized === "string") {
         return authorized === match;
     }
@@ -355,7 +368,7 @@ async function checkMethodMatch(data, authorized, match) {
     if (Array.isArray(authorized)) {
         for (const rule of authorized) {
             const ruleStatus = await checkMethodMatch(data, rule, newmatch || match);
-            if (ruleStatus === true) status = true; // Short-circuit logic optimization
+            if (ruleStatus === true) status = true;
         }
     } else if (typeof authorized === "object" && authorized !== null) {
         for (const key of Object.keys(authorized)) {
@@ -653,4 +666,4 @@ function generateDotNotation(data, path, isExclusion = false) {
     return result;
 }
 
-export default { check };
+export { check };
