@@ -20,16 +20,35 @@ import crud from "@cocreate/crud-server";
 
 const organizations = {};
 
-// ==========================================
-// Event Listeners for Cache Invalidation
-// ==========================================
+/**
+ * Safely converts flexible representations of booleans ("true", "false", 1, 0, "1", "0")
+ * into strict boolean values. Returns undefined for non-boolean strings or non-binary numbers.
+ *
+ * @param {any} value - Value to evaluate.
+ * @returns {boolean|undefined} Explicit boolean or undefined if not a boolean literal.
+ */
+function parseBoolean(value) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") {
+        if (value === 1) return true;
+        if (value === 0) return false;
+        return undefined;
+    }
+    if (typeof value === "string") {
+        const normalized = value.trim().toLowerCase();
+        if (normalized === "true" || normalized === "1") return true;
+        if (normalized === "false" || normalized === "0") return false;
+    }
+    return undefined;
+}
+
 if (typeof window !== "undefined") {
     if (crud && typeof crud.listen === "function") {
-        crud.listen("object.update", function (data) {
+        crud.listen("object.update", (data) => {
             updateAuthorization(data);
         });
 
-        crud.listen("object.delete", function (data) {
+        crud.listen("object.delete", (data) => {
             deleteAuthorization(data);
         });
     }
@@ -49,39 +68,27 @@ if (typeof window !== "undefined") {
 /**
  * Updates the cached authorization for a specific key within an organization.
  *
- * This function checks if the `array` is `"keys"` and if an authorization object is provided.
- * If the conditions are met, it fetches the latest authorization details using the `readAuthorization`
- * function and updates the cache for the given `organization_id` and `key`.
- *
- * @param {object} data - The data object containing:
- * - `array`: The type of collection being updated (e.g., "keys").
- * - `object`: The object array containing the authorization details.
- * - `organization_id`: The ID of the organization the authorization belongs to.
- * @returns {Promise<void>} Resolves when the update is complete.
+ * @param {object} data - The data object containing array, object, and organization_id.
+ * @returns {Promise<void>}
  */
-export async function updateAuthorization(data) {
+async function updateAuthorization(data) {
     const { array, object, organization_id } = data;
 
-    // Ensure we're working with "keys" and an authorization object is provided
-    if (array === "keys" && object) {
-        let authorization = object[0];
+    if (array === "keys" && Array.isArray(object) && object.length > 0) {
+        const authorization = object[0];
 
-        // Check if the authorization key exists in the cache
         if (
             authorization &&
             authorization.key &&
             organizations[organization_id] &&
             organizations[organization_id][authorization.key]
         ) {
-            // Fetch the latest authorization details
-            let newAuthorization = await readAuthorization(
+            // Fetch latest authorization and refresh cache
+            const newAuthorization = await readAuthorization(
                 authorization.key,
                 data
             );
-
-            // Update the cache with the new authorization details
-            organizations[organization_id][authorization.key] =
-                newAuthorization;
+            organizations[organization_id][authorization.key] = newAuthorization;
         }
     }
 }
@@ -89,31 +96,21 @@ export async function updateAuthorization(data) {
 /**
  * Deletes the cached authorization for a specific key within an organization.
  *
- * This function checks if the `array` is `"keys"` and if an authorization object is provided.
- * If the conditions are met, it removes the cached authorization for the given
- * `organization_id` and `key` from the `organizations` cache.
- *
- * @param {object} data - The data object containing:
- * - `array`: The type of collection being deleted (e.g., "keys").
- * - `object`: The object array containing the authorization details.
- * - `organization_id`: The ID of the organization the authorization belongs to.
- * @returns {Promise<void>} Resolves when the deletion is complete.
+ * @param {object} data - The data object containing array, object, and organization_id.
+ * @returns {Promise<void>}
  */
-export async function deleteAuthorization(data) {
+async function deleteAuthorization(data) {
     const { array, object, organization_id } = data;
 
-    // Ensure we're working with "keys" and an authorization object is provided
-    if (array === "keys" && object) {
-        let authorization = object[0];
+    if (array === "keys" && Array.isArray(object) && object.length > 0) {
+        const authorization = object[0];
 
-        // Check if the authorization key exists in the cache
         if (
             authorization &&
             authorization.key &&
             organizations[organization_id] &&
             organizations[organization_id][authorization.key]
         ) {
-            // Remove the cached authorization for the given key
             delete organizations[organization_id][authorization.key];
         }
     }
@@ -121,664 +118,492 @@ export async function deleteAuthorization(data) {
 
 /**
  * Retrieves the cached authorization for a specific key within an organization.
- *
- * If the authorization is not cached, this function fetches the authorization
- * details using the `readAuthorization` function and stores it in the cache.
+ * Safely handles concurrent request promises to avoid race conditions.
  *
  * @param {string} key - The authorization key (e.g., user ID or API key).
- * @param {object} data - The data object containing:
- * - `organization_id`: The ID of the organization the authorization belongs to.
+ * @param {object} data - The data object containing organization_id.
  * @returns {Promise<object>} A promise that resolves to the authorization details.
  */
-export async function getAuthorization(key, data) {
-    let organization_id = data.organization_id;
+async function getAuthorization(key, data) {
+    const { organization_id } = data;
+    if (!organization_id) return { error: "An organization_id is required" };
 
-    // Initialize the cache for the organization if it doesn't exist
-    if (!organizations[organization_id])
+    if (!organizations[organization_id]) {
         organizations[organization_id] = {};
+    }
 
-    // If the authorization for the key is not cached, fetch and cache it
-    if (!organizations[organization_id][key])
-        organizations[organization_id][key] = readAuthorization(
-            key,
-            data
-        );
+    // Cache promise directly to deduplicate concurrent requests for the same key
+    if (!organizations[organization_id][key]) {
+        organizations[organization_id][key] = readAuthorization(key, data);
+    }
 
-    // Await the authorization (handles the promise stored during the initial fetch)
-    organizations[organization_id][key] = await organizations[
-        organization_id
-    ][key];
-
-    return organizations[organization_id][key];
-}
-
-/**
- * Reads authorization details for a given key (user ID or API key) and organization.
- *
- * This function constructs a request to retrieve authorization details from the database.
- * If the `key` is provided, it queries for the specific authorization key.
- * If no `key` is provided, it queries for the default authorization settings.
- *
- * Additionally, it resolves roles associated with the authorization and merges role permissions
- * into the final authorization object.
- *
- * @param {string} key - The authorization key (e.g., user ID or API key).
- * @param {object} data - The data object containing request details, such as the `organization_id` and `host`.
- * @returns {Promise<object>} A promise that resolves to the authorization object or an error message.
- */
-export async function readAuthorization(key, data) {
     try {
-        // Extract and validate the organization_id
-        let organization_id = data.organization_id;
-        if (!organization_id)
-            return { error: "An organization_id is required" };
-
-        // Construct the initial request for authorization data
-        let request = {
-            method: "object.read", // CRUD method to read the object
-            host: data.host, // Host associated with the request
-            database: organization_id, // Database scoped to the organization
-            array: "keys", // Collection or array to query
-            organization_id, // Organization context for the request
-            $filter: {
-                query: {}, // Query filters to apply
-                limit: 2 // Limit to 2 results to fetch both default and specific key if needed
-            }
-        };
-
-        // Always fetch the default authorization and, if provided, the specific key
-        request.$filter.query.$or = [{ default: true }];
-        if (key) request.$filter.query.$or.push({ key: key });
-
-        // Send the request to the CRUD layer
-        let authRes = await crud.send(request);
-
-        // If authorization data exists, merge default + key (key overrides default)
-        if (authRes && authRes.object && authRes.object.length) {
-            const objs = authRes.object;
-            const defaultDoc = objs.find((o) => o && o.default) || {};
-            const keyDoc = key ? objs.find((o) => o && o.key === key) : undefined;
-
-            // Expand dot-notation fields and merge: defaults then key-specific (key overrides)
-            const expandedDefault = dotNotationToObject({}, defaultDoc || {});
-            const expandedKey = keyDoc ? dotNotationToObject({}, keyDoc) : {};
-            let authorization = dotNotationToObject(expandedDefault, expandedKey);
-
-            // Merge roles uniquely (default roles + key roles)
-            const defaultRoles = defaultDoc.roles || [];
-            const keyRoles = (keyDoc && keyDoc.roles) || [];
-            authorization.roles = Array.from(new Set([...defaultRoles, ...keyRoles]));
-
-            // Ensure the 'arrays' field exists to prevent undefined references
-            if (!authorization.arrays) authorization.arrays = {};
-
-            // Process roles associated with the authorization (if any)
-            if (authorization && authorization.roles && authorization.roles.length) {
-                const role_ids = [];
-                authorization.roles.forEach((_id) => {
-                    if (_id) role_ids.push({ _id });
-                });
-
-                // Prepare a new request to fetch role details
-                delete request.$filter;
-                delete request.isFilter;
-
-                request.object = role_ids;
-
-                // Retrieve and merge role permissions into the authorization object
-                let roles = await crud.send(request);
-                roles = roles.object;
-
-                for (let role of roles) {
-                    authorization = dotNotationToObject(authorization, role);
-                }
-            }
-
-            return authorization; // Return the final merged authorization object
-        } else {
-            // Return an empty object if no authorization is found
-            return {};
-        }
+        const resolvedAuth = await organizations[organization_id][key];
+        organizations[organization_id][key] = resolvedAuth;
+        return resolvedAuth;
     } catch (error) {
-        // Handle and log any errors during the process
-        console.log("authorization Error", error);
+        delete organizations[organization_id][key];
         return { error };
     }
 }
 
 /**
- * Validates the authorization of a user or an API key to perform an action.
+ * Reads authorization details for a given key and organization.
+ * Merges default permissions, key-specific permissions, and associated roles.
  *
- * The function first checks authorization using the provided `user_id`.
- * If that fails or returns an error, it checks the authorization using the `apikey`
- * present in the `data` object.
+ * @param {string} key - The authorization key (e.g., user ID or API key).
+ * @param {object} data - Request details containing organization_id and host.
+ * @returns {Promise<object>}
+ */
+async function readAuthorization(key, data) {
+    try {
+        const { organization_id, host } = data;
+        if (!organization_id) return { error: "An organization_id is required" };
+
+        const request = {
+            method: "object.read",
+            host,
+            database: organization_id,
+            array: "keys",
+            organization_id,
+            $filter: {
+                query: {
+                    $or: key
+                        ? [{ default: true }, { default: "true" }, { default: 1 }, { key }]
+                        : [{ default: true }, { default: "true" }, { default: 1 }]
+                },
+                limit: 2
+            }
+        };
+
+        const authRes = await crud.send(request);
+
+        if (authRes && Array.isArray(authRes.object) && authRes.object.length) {
+            const objs = authRes.object;
+            const defaultDoc = objs.find((o) => o && parseBoolean(o.default) === true) || {};
+            const keyDoc = key ? objs.find((o) => o && o.key === key) : undefined;
+
+            const expandedDefault = dotNotationToObject({}, defaultDoc);
+            const expandedKey = keyDoc ? dotNotationToObject({}, keyDoc) : {};
+            let authorization = dotNotationToObject(expandedDefault, expandedKey);
+
+            // Set unique roles combination
+            const defaultRoles = defaultDoc.roles || [];
+            const keyRoles = (keyDoc && keyDoc.roles) || [];
+            authorization.roles = Array.from(new Set([...defaultRoles, ...keyRoles]));
+
+            if (!authorization.arrays) authorization.arrays = {};
+
+            // Fetch and merge role permissions if roles exist
+            if (authorization.roles.length) {
+                const role_ids = authorization.roles
+                    .filter(Boolean)
+                    .map((_id) => ({ _id }));
+
+                if (role_ids.length > 0) {
+                    delete request.$filter;
+                    delete request.isFilter;
+                    request.object = role_ids;
+
+                    const rolesRes = await crud.send(request);
+                    const roles = (rolesRes && rolesRes.object) || [];
+
+                    for (const role of roles) {
+                        authorization = dotNotationToObject(authorization, role);
+                    }
+                }
+            }
+
+            return authorization;
+        }
+
+        return {};
+    } catch (error) {
+        console.error("authorization Error", error);
+        return { error };
+    }
+}
+
+/**
+ * Validates authorization using user_id first, falling back to apikey.
+ * Automatically restores original query filters if present from a previous pass.
  *
- * @param {object} data - The data object containing request details, such as the `apikey` and `organization_id`.
- * @param {string} user_id - The user ID for authorization validation.
- * @returns {Promise<object|boolean>} A promise that resolves to the authorization result:
- * - `false` if unauthorized.
- * - An object with authorization details if authorized.
+ * @param {object} data - Request details including apikey and organization_id.
+ * @param {string} user_id - The user ID for validation.
+ * @returns {Promise<object|boolean>}
  */
 export async function check(data, user_id) {
-    let authorization = false;
-
-    // Attempt to check authorization with the user ID if provided
-    if (user_id) {
-        authorization = await checkAuthorization({
-            key: user_id,
-            data
-        });
+    // Automatically restore original filter if present from a previous pass
+    if (data && data.$filter && data.$filter.original !== undefined) {
+        restoreFilter(data);
     }
 
-    // Fallback to checking authorization with the API key if user ID check fails
+    let authorization = false;
+
+    if (user_id) {
+        authorization = await checkAuthorization({ key: user_id, data });
+    }
+
     if (!authorization || authorization.error) {
-        authorization = await checkAuthorization({
-            key: data.apikey,
-            data
-        });
+        if (data.apikey) {
+            authorization = await checkAuthorization({ key: data.apikey, data });
+        }
     }
 
     return authorization;
 }
 
 /**
- * Checks whether a given key (user ID or API key) is authorized to perform the specified action.
+ * Validates whether a key is authorized to perform the action specified in `data`.
  *
- * The function validates the presence of required fields in the `data` object (`organization_id`, `method`),
- * fetches authorization details, and performs checks such as:
- * - Organization ID matching.
- * - Host-level restrictions.
- * - Admin privileges.
- * - Defined actions and their permissions.
- *
- * @param {object} params - The parameters for the function.
- * @param {string} params.key - The key used for authorization (user ID or API key).
- * @param {object} params.data - The data object containing details like `organization_id`, `host`, and `method`.
- * @returns {Promise<object|boolean>} A promise that resolves to:
- * - An object with an error message if validation fails.
- * - `false` if authorization checks fail.
- * - `true` or an object with sanitized `data` if authorized.
+ * @param {object} params
+ * @param {string} params.key - Key used for authorization (user ID or API key).
+ * @param {object} params.data - Request details.
+ * @returns {Promise<object|boolean>}
  */
-export async function checkAuthorization({ key, data }) {
-    // Validate required fields
-    if (!data.organization_id)
-        return { error: "organization_id is required" };
+async function checkAuthorization({ key, data }) {
+    if (!data.organization_id) return { error: "organization_id is required" };
     if (!data.method) return { error: "method is required" };
 
-    // Fetch authorization details using the provided key
-    let authorized = await getAuthorization(key, data);
+    const authorized = await getAuthorization(key, data);
 
-    // If no authorization details or an error is returned, propagate the error or deny access
     if (!authorized || authorized.error) return authorized;
 
-    // Ensure the organization ID matches
-    if (authorized.organization_id !== data.organization_id)
+    // Verify organization ID scoping
+    if (authorized.organization_id && authorized.organization_id !== data.organization_id) {
         return false;
-
-    // Validate host restrictions if specified
-    if (authorized.host && authorized.host.length) {
-        if (
-            !authorized.host ||
-            (!authorized.host.includes(data.host) &&
-                !authorized.host.includes("*"))
-        )
-            return false;
     }
 
-    // Allow access if the user has admin privileges
-    if (authorized.admin === "true" || authorized.admin === true)
+    // Validate host restriction list
+    if (Array.isArray(authorized.host) && authorized.host.length > 0) {
+        const isAllowedHost =
+            authorized.host.includes(data.host) || authorized.host.includes("*");
+        if (!isAllowedHost) return false;
+    }
+
+    // Direct bypass for admins (handles true, "true", 1, "1")
+    if (parseBoolean(authorized.admin) === true) {
         return true;
-
-    // Ensure actions are defined for the authorization
-    if (!authorized.actions)
-        return {
-            error: "Authorization does not have any actions defined"
-        };
-
-    // Check if the requested method is allowed under the defined actions
-    let status = await checkMethod(
-        data,
-        authorized.actions,
-        data.method
-    );
-
-    // If the method check fails, deny access
-    if (!status) {
-        return false;
     }
 
-    // Return the sanitized and authorized data if all checks pass
+    if (!authorized.actions) {
+        return { error: "Authorization does not have any actions defined" };
+    }
+
+    const status = await checkMethod(data, authorized.actions, data.method);
+    if (!status) return false;
+
     return { authorized: data };
 }
 
 /**
- * Validates whether a method is permitted based on the authorization rules.
+ * Matches requested method against authorization rules using dot notation hierarchy.
  *
- * This function checks for an exact match of the `method` in the `authorized` actions.
- * If no exact match is found, it checks progressively for partial matches using dot notation (e.g., "read.user").
- *
- * @param {object} data - The data object containing request details.
- * @param {object} authorized - The authorization rules object mapping methods to permissions.
- * @param {string} method - The method to validate (e.g., "read.user").
- * @returns {Promise<boolean>} A promise that resolves to `true` if the method is authorized, `false` otherwise.
+ * @param {object} data - Request data.
+ * @param {object} authorized - Authorization actions tree.
+ * @param {string} method - Method string (e.g. "object.read").
+ * @returns {Promise<boolean>}
  */
-export async function checkMethod(data, authorized, method) {
-    // Check for an exact match of the method in the authorization rules
-    if (authorized[method]) {
+async function checkMethod(data, authorized, method) {
+    if (authorized[method] !== undefined) {
         return await checkMethodMatch(data, authorized[method], method);
     }
-    // Check for partial matches using dot notation (e.g., "read.user")
-    else if (method.includes(".")) {
+
+    if (method.includes(".")) {
         let match = "";
-        let splitMethod = method.split(".");
+        const splitMethod = method.split(".");
 
         for (let i = 0; i < splitMethod.length; i++) {
-            if (!match) match = splitMethod[i];
-            else match += "." + splitMethod[i];
+            match = match ? `${match}.${splitMethod[i]}` : splitMethod[i];
 
-            // If a partial match is found, validate it
-            if (authorized[match]) {
-                return await checkMethodMatch(
-                    data,
-                    authorized[match],
-                    match
-                );
+            if (authorized[match] !== undefined) {
+                return await checkMethodMatch(data, authorized[match], match);
             }
-            // If the last segment has no match, deny access
-            else if (i === splitMethod.length - 1) return false;
         }
     }
-    // Deny access if no match is found
-    else return false;
+
+    return false;
 }
 
 /**
- * Checks whether a given method matches the authorized permissions and
- * optionally sanitizes the provided data based on inclusion and exclusion rules.
+ * Evaluates authorization rules and applies field-level sanitization when $keys rules exist.
  *
- * This function supports various types of authorization configurations, including:
- * - Booleans: Directly allow (`true`) or deny (`false`).
- * - Strings: Match the authorization string with the method or default to allow.
- * - Numbers: Treat any non-zero number as `true` (authorized).
- * - Arrays: Recursively check multiple authorization rules.
- * - Objects: Evaluate nested authorization rules and apply inclusion/exclusion logic.
- *
- * The function also aggregates all inclusion and exclusion rules before sanitizing
- * the data, ensuring consistent prioritization logic is applied holistically.
- *
- * @param {object} data - The data object containing the method and other fields to process.
- * @param {boolean | string | number | object | Array} authorized - The authorization rules.
- * @param {string} match - The method string to match against the authorization rules.
- * @returns {Promise<boolean>} A promise that resolves to `true` if the method is authorized,
- * `false` otherwise.
+ * @param {object} data - Input payload.
+ * @param {boolean|string|number|object|Array} authorized - Permission rule definition.
+ * @param {string} match - Current method match key.
+ * @returns {Promise<boolean>}
  */
-export async function checkMethodMatch(data, authorized, match) {
-    if (typeof authorized === "boolean") {
-        return authorized;
-    } else if (typeof authorized === "string") {
-        if (authorized === "false") return false;
-        else if (authorized === "true") return true;
-        else if (authorized === match) return true;
-        else return true;
-    } else if (typeof authorized === "number") {
-        return !!authorized;
-    } else {
-        let status = false;
-        let newmatch = data.method.replace(match + ".", "");
+async function checkMethodMatch(data, authorized, match) {
+    // Evaluate explicit boolean/numeric/string booleans first
+    const boolVal = parseBoolean(authorized);
+    if (boolVal !== undefined) {
+        return boolVal;
+    }
 
-        // Aggregate raw keys
-        let rawKeys = [];
+    // String permission rule match (e.g. string matching exact method name)
+    if (typeof authorized === "string") {
+        return authorized === match;
+    }
 
-        if (Array.isArray(authorized)) {
-            for (let i = 0; i < authorized.length; i++) {
-                status = await checkMethodMatch(
-                    data,
-                    authorized[i],
-                    newmatch
-                );
-            }
-        } else if (typeof authorized === "object") {
-            for (const key of Object.keys(authorized)) {
-                if (key.includes("$")) {
-                    if (
-                        [
-                            "$storage",
-                            "$database",
-                            "$array",
-                            "$index"
-                        ].includes(key)
-                    ) {
-                        let opStatus = await checkMethodOperators(
-                            data,
-                            key,
-                            authorized[key]
-                        );
-                        if (opStatus === true || opStatus === false)
-                            status = opStatus;
-                    } else if (key === "$keys") {
-                        let type = data.method.split(".")[0];
-                        if (data[type]) {
-                            rawKeys.push(authorized[key]); // Collect raw authorization keys
-                        }
-                    } else {
-                        let isFilter = applyFilter(
-                            data,
-                            authorized[key],
-                            key
-                        );
-                        console.log("isFilter", isFilter);
+    let status = false;
+    const newmatch = data.method.startsWith(match + ".")
+        ? data.method.slice(match.length + 1)
+        : "";
+
+    const rawKeys = [];
+
+    if (Array.isArray(authorized)) {
+        for (const rule of authorized) {
+            const ruleStatus = await checkMethodMatch(data, rule, newmatch || match);
+            if (ruleStatus === true) status = true; // Short-circuit logic optimization
+        }
+    } else if (typeof authorized === "object" && authorized !== null) {
+        for (const key of Object.keys(authorized)) {
+            if (key.startsWith("$")) {
+                if (["$storage", "$database", "$array", "$index"].includes(key)) {
+                    const opStatus = await checkMethodOperators(data, key, authorized[key]);
+                    if (typeof opStatus === "boolean") status = opStatus;
+                } else if (key === "$keys") {
+                    const type = data.method.split(".")[0];
+                    if (data[type]) {
+                        rawKeys.push(authorized[key]);
                     }
+                } else {
+                    const filterStatus = applyFilter(data, authorized[key], key);
+                    if (filterStatus) status = true;
                 }
             }
         }
+    }
 
-        // Parse all raw keys together to get inclusion/exclusion
-        let { inclusion, exclusion } = parsePermissions(rawKeys);
-
-        // Apply sanitization if there are inclusion or exclusion rules
+    // Process field sanitization if $keys definitions were encountered
+    if (rawKeys.length > 0) {
+        const { inclusion, exclusion } = parsePermissions(rawKeys);
         if (inclusion || exclusion) {
-            let type = data.method.split(".")[0]; // Extract type from method
+            const type = data.method.split(".")[0];
             if (data[type]) {
-                data[type] = sanitizeData(
-                    data[type],
-                    inclusion,
-                    exclusion
-                );
+                data[type] = sanitizeData(data[type], inclusion, exclusion);
                 status = true;
             }
         }
-
-        if (newmatch) {
-            if (!status && authorized[newmatch]) {
-                status = await checkMethodMatch(
-                    data,
-                    authorized[newmatch],
-                    newmatch
-                );
-            }
-            if (!status && authorized["*"]) {
-                status = await checkMethodMatch(
-                    data,
-                    authorized["*"],
-                    newmatch
-                );
-            }
-        }
-
-        return status;
     }
+
+    // Check nested fallback matches (* or exact remaining path)
+    if (newmatch && !status && typeof authorized === "object" && authorized !== null) {
+        if (authorized[newmatch] !== undefined) {
+            status = await checkMethodMatch(data, authorized[newmatch], newmatch);
+        } else if (authorized["*"] !== undefined) {
+            status = await checkMethodMatch(data, authorized["*"], newmatch);
+        }
+    }
+
+    return status;
 }
 
 /**
- * Checks method operators to validate authorization based on dynamic data types and keys.
- *
- * @param {Object} data - The input data object containing various properties.
- * @param {string} key - A string key to determine the type of operation,
- * starting with `$` for dynamic type-based checks.
- * @param {string} authorization - The authorization identifier, which could be a static value
- * or a dynamic reference like `$user_id`.
- *
- * @returns {boolean|undefined} - Returns `true` if authorized, `false` if unauthorized,
- * or `undefined` if no validation applies.
+ * Dynamic operator evaluation ($storage, $database, $array, $index).
  */
-export async function checkMethodOperators(data, key, authorization) {
+async function checkMethodOperators(data, key, authorization) {
     try {
-        // Adjust authorization dynamically if `$user_id` is provided and user info exists in the socket
-        if (authorization === "$user_id" && data.socket) {
-            authorization = data.socket.user_id || data.user_id;
+        if (authorization === "$user_id") {
+            authorization = (data.socket && data.socket.user_id) || data.user_id;
+            if (!authorization) return false;
         }
 
-        // Check if the key starts with `$`, indicating a dynamic type-based operation
         if (key.startsWith("$")) {
-            let type = key.substring(1); // Extract the type by removing `$`
+            const type = key.substring(1);
 
-            // If the specified type does not exist in data, return undefined
-            if (!data[type]) {
-                return undefined;
-            }
+            if (!data[type]) return undefined;
 
-            // Handle cases where the type is a string
             if (typeof data[type] === "string") {
-                return checkAuthorizationData(
-                    data,
-                    authorization,
-                    data[type]
-                );
+                return checkAuthorizationData(data, authorization, data[type]);
             }
-            // Handle cases where the type is an array
-            else if (Array.isArray(data[type])) {
-                if (!data[type].length) return undefined; // Return undefined for empty arrays
 
-                // ToDo: Current strategy ensures all items must match; adjust as needed
+            if (Array.isArray(data[type])) {
+                if (!data[type].length) return undefined;
+
                 let allAuthorized = true;
                 for (let i = 0; i < data[type].length; i++) {
-                    const itemData =
-                        typeof data[type][i] === "object"
-                            ? data[type][i].name // Extract name if the item is an object
-                            : data[type][i];
-                    const authResult = checkAuthorizationData(
-                        data,
-                        authorization,
-                        itemData
-                    );
-                    if (authResult === false) {
-                        return false; // Return false if any item fails validation
-                    } else if (authResult === undefined) {
-                        allAuthorized = undefined; // Mark as undefined if any validation is inconclusive
-                    }
+                    const itemData = typeof data[type][i] === "object" && data[type][i] !== null
+                        ? data[type][i].name
+                        : data[type][i];
+
+                    const authResult = checkAuthorizationData(data, authorization, itemData);
+                    if (authResult === false) return false;
+                    if (authResult === undefined) allAuthorized = undefined;
                 }
                 return allAuthorized;
             }
-            // Handle cases where the type is an object
-            else if (typeof data[type] === "object") {
-                return checkAuthorizationData(
-                    data,
-                    authorization,
-                    data[type].name
-                );
+
+            if (typeof data[type] === "object" && data[type] !== null) {
+                return checkAuthorizationData(data, authorization, data[type].name);
             }
         }
 
-        // Return undefined if no conditions match
         return undefined;
     } catch (e) {
-        // Log the error and return undefined in case of an exception
-        console.log(e);
+        console.error("Operator Check Error:", e);
         return undefined;
     }
 }
 
 /**
- * Checks if the provided key is authorized based on the authorization rules.
- *
- * @param {Object} data - The data object to be used in filtering.
- * @param {string|Array|Object} authorization - The authorization rules, which can be a string, array, or object.
- * @param {string} key - The key to be checked against the authorization rules.
- * @returns {boolean|undefined} - Returns true if authorized, false if explicitly unauthorized, and undefined if no rule matches.
+ * Checks authorization rule match for a given key string/array/object.
  */
-export function checkAuthorizationData(data, authorization, key) {
-    // If the authorization is a string, check if it matches the key.
+function checkAuthorizationData(data, authorization, key) {
     if (typeof authorization === "string") {
-        if (key === authorization)
-            return true; // Key matches the authorization string.
-        else return undefined; // No match, return undefined.
+        return key === authorization ? true : undefined;
     }
-    // If the authorization is an array, check if the key is included in the array.
-    else if (Array.isArray(authorization)) {
-        if (authorization.includes(key))
-            return true; // Key is included in the array.
-        else return undefined; // Key not found, return undefined.
+
+    if (Array.isArray(authorization)) {
+        return authorization.includes(key) ? true : undefined;
     }
-    // If the authorization is an object, handle various object-based rules.
-    else if (typeof authorization === "object") {
-        // If the authorization[key] is an object, apply filters recursively.
-        if (typeof authorization[key] === "object") {
+
+    if (typeof authorization === "object" && authorization !== null) {
+        if (typeof authorization[key] === "object" && authorization[key] !== null) {
             for (const queryKey of Object.keys(authorization[key])) {
-                return applyFilter(data, authorization[key], queryKey); // Apply the filter logic.
+                return applyFilter(data, authorization[key], queryKey);
             }
         }
-        // If authorization[key] is explicitly false or "false", return false.
-        else if (
-            authorization[key] === false ||
-            authorization[key] === "false"
-        )
-            return false;
-        // If authorization[key] exists and is truthy, return true.
-        else if (authorization[key]) return true;
-        // If none of the above conditions match, return undefined.
-        else return undefined;
+
+        // Safely evaluate flexible booleans ("false", "0", 0, "true", 1, true, false)
+        const boolVal = parseBoolean(authorization[key]);
+        if (boolVal !== undefined) return boolVal;
     }
+
+    return undefined;
 }
 
-export function applyFilter(data, authorization, authorizationKey) {
-    let keyParts = authorizationKey.split(".");
-    let operator = keyParts.pop();
-    let key = keyParts.join(".");
-    if (
-        [
-            "$eq",
-            "$ne",
-            "$lt",
-            "$lte",
-            "$gt",
-            "$gte",
-            "$in",
-            "$nin",
-            "$or",
-            "$and",
-            "$not",
-            "$nor",
-            "$exists",
-            "$type",
-            "$mod",
-            "$regex",
-            "$text",
-            "$where",
-            "$all",
-            "$elemMatch",
-            "$size"
-        ].includes(operator)
-    ) {
-        if (!data.$filter) data.$filter = { query: {} };
-        else if (!data.$filter.query) data.$filter.query = {};
+/**
+ * Appends query conditions to request payload filter object.
+ * Preserves original query in data.$filter.original and wraps conditions safely in $and.
+ * Replaces $user_id token with active session or user ID.
+ */
+function applyFilter(data, authorization, authorizationKey) {
+    const keyParts = authorizationKey.split(".");
+    const operator = keyParts.pop();
+    const key = keyParts.join(".");
 
-        if (
-            authorization[authorizationKey] === "$user_id" &&
-            data.socket
-        ) {
-            authorization[authorizationKey] =
-                data.socket.user_id || data.user_id;
+    const supportedOperators = [
+        "$eq", "$ne", "$lt", "$lte", "$gt", "$gte", "$in", "$nin",
+        "$or", "$and", "$not", "$nor", "$exists", "$type", "$mod",
+        "$regex", "$text", "$where", "$all", "$elemMatch", "$size"
+    ];
+
+    if (supportedOperators.includes(operator)) {
+        if (!data.$filter) data.$filter = { query: {} };
+        if (!data.$filter.query) data.$filter.query = {};
+
+        // Preserve client's original filter before applying security constraints
+        if (!data.$filter.original) {
+            data.$filter.original = JSON.parse(JSON.stringify(data.$filter.query));
         }
 
-        if (typeof authorization === "string")
-            data.$filter.query[key] = {
-                [operator]: authorization
+        let value = typeof authorization === "string" ? authorization : authorization[authorizationKey];
+        
+        // Resolve $user_id dynamically from socket session or request body
+        if (value === "$user_id") {
+            value = (data.socket && data.socket.user_id) || data.user_id;
+            // Prevent unauthenticated undefined tokens from matching undefined fields
+            if (!value) return false;
+        }
+
+        const securityConstraint = { [key]: { [operator]: value } };
+
+        // Wrap existing client query and security constraint together with top-level $and
+        if (Object.keys(data.$filter.query).length === 0) {
+            data.$filter.query = securityConstraint;
+        } else if (Array.isArray(data.$filter.query.$and)) {
+            data.$filter.query.$and.push(securityConstraint);
+        } else {
+            data.$filter.query = {
+                $and: [
+                    data.$filter.query,
+                    securityConstraint
+                ]
             };
-        else
-            data.$filter.query[key] = {
-                [operator]: authorization[authorizationKey]
-            };
+        }
 
         return true;
     }
+    return false;
 }
 
 /**
- * Parses permissions into inclusion and exclusion arrays.
+ * Restores original client $filter.query from data.$filter.original backup.
+ * Internal helper automatically invoked at the start of check() on pass 2.
  *
- * @param {string | object | Array<string | object>} authorization - The authorization to parse.
- * @returns {object} An object containing 'inclusion' and 'exclusion' arrays.
+ * @param {object} data - The request data object.
+ * @returns {boolean} True if filter was restored, false otherwise.
  */
-export function parsePermissions(authorization) {
-    // Initialize local arrays for inclusion and exclusion
+function restoreFilter(data) {
+    if (data && data.$filter && data.$filter.original !== undefined) {
+        data.$filter.query = JSON.parse(JSON.stringify(data.$filter.original));
+        delete data.$filter.original;
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Parses raw $keys permission entries into inclusion or exclusion lists.
+ * Prioritizes inclusions over exclusions.
+ */
+function parsePermissions(authorization) {
     const inclusion = [];
     const exclusion = [];
 
-    // Helper function to process a single permission entry
     function processPermission(entry) {
         if (typeof entry === "string") {
-            // Treat string as inclusion
             inclusion.push(entry);
         } else if (typeof entry === "object" && entry !== null) {
             for (const [key, value] of Object.entries(entry)) {
-                if (value === true) {
-                    inclusion.push(key);
-                } else if (value === false) {
-                    exclusion.push(key);
-                }
-                // Ignore entries where value is neither true nor false
+                const boolVal = parseBoolean(value);
+                if (boolVal === true) inclusion.push(key);
+                else if (boolVal === false) exclusion.push(key);
             }
         }
-        // Ignore entries that are neither string nor object
     }
 
-    // Normalize the input into an array of permission entries
-    let permissionEntries = [];
+    const permissionEntries = Array.isArray(authorization)
+        ? authorization
+        : (authorization ? [authorization] : []);
 
-    if (Array.isArray(authorization)) {
-        permissionEntries = authorization;
-    } else if (
-        typeof authorization === "string" ||
-        (typeof authorization === "object" && authorization !== null)
-    ) {
-        permissionEntries = [authorization];
-    }
-    // If authorization is undefined or null, treat as empty
-
-    // Process each permission entry
     permissionEntries.forEach(processPermission);
 
-    // Apply prioritization logic
     if (inclusion.length > 0) {
-        // If any inclusion exists, disregard exclusions
         return { inclusion, exclusion: null };
     } else if (exclusion.length > 0) {
-        // If only exclusions exist, disregard inclusions
         return { inclusion: null, exclusion };
-    } else {
-        // If neither exists, set both to null
-        return { inclusion: null, exclusion: null };
     }
+
+    return { inclusion: null, exclusion: null };
 }
 
 /**
- * Sanitizes data based on parsed permissions.
- *
- * @param {object | Array} data - The data object or array to sanitize.
- * @param {Array} inclusion - The parsed inclusion array.
- * @param {Array} exclusion - The parsed exclusion array.
- * @returns {object | Array} The sanitized data object or array.
+ * Sanitizes object/array payloads according to inclusion/exclusion permission rules.
  */
-export function sanitizeData(data, inclusion, exclusion) {
-    // If both inclusion and exclusion are null, return the data as is
+function sanitizeData(data, inclusion, exclusion) {
     if (inclusion === null && exclusion === null) {
         return data;
     }
 
     if (Array.isArray(data)) {
-        return data.map((item) =>
-            sanitizeData(item, inclusion, exclusion)
-        );
-    } else if (typeof data === "object" && data !== null) {
+        return data.map((item) => sanitizeData(item, inclusion, exclusion));
+    }
+
+    if (typeof data === "object" && data !== null) {
         let sanitized = {};
 
         if (inclusion) {
-            // Include only specified fields (supports nested fields)
             for (let i = 0; i < inclusion.length; i++) {
-                let inclusionData = generateDotNotation(
-                    data,
-                    inclusion[i]
-                );
+                const inclusionData = generateDotNotation(data, inclusion[i]);
                 sanitized = { ...sanitized, ...inclusionData };
             }
             return dotNotationToObject(sanitized);
         } else if (exclusion) {
             for (let i = 0; i < exclusion.length; i++) {
-                let exclusionData = generateDotNotation(
-                    data,
-                    exclusion[i],
-                    true
-                );
+                const exclusionData = generateDotNotation(data, exclusion[i], true);
                 sanitized = { ...sanitized, ...exclusionData };
             }
             return dotNotationToObject(sanitized, data);
@@ -789,102 +614,43 @@ export function sanitizeData(data, inclusion, exclusion) {
 }
 
 /**
- * Generates an object with dot notation keys from the given data and path.
+ * Extracts dot-notation paths from target data without mutating keys parameter.
  */
-export function generateDotNotation(data, path, isEclusion) {
-    if (typeof path !== "string")
-        throw new Error("Path must be a string");
+function generateDotNotation(data, path, isExclusion = false) {
+    if (typeof path !== "string") throw new Error("Path must be a string");
 
-    let result = {};
+    const result = {};
 
-    function processKeys(dataItem, keys, prefix = "", result) {
+    function processKeys(dataItem, keys, index, prefix) {
         if (dataItem === undefined) return;
 
-        if (!keys.length) {
-            if (isEclusion) {
-                result[prefix] = undefined;
-            } else {
-                result[prefix] = dataItem;
-            }
+        if (index >= keys.length) {
+            result[prefix] = isExclusion ? undefined : dataItem;
             return;
         }
 
-        let key = keys.shift();
-        let isArray = key.endsWith("[]");
-        if (isArray) key = key.slice(0, -2); // Remove [] from key
+        let key = keys[index];
+        const isArray = key.endsWith("[]");
+        if (isArray) key = key.slice(0, -2);
 
-        // Construct prefix
-        prefix = prefix ? `${prefix}.${key}` : key;
-
-        const currentData = getValueFromObject(dataItem, key); // Using your existing function
+        const currentPrefix = prefix ? `${prefix}.${key}` : key;
+        const currentData = getValueFromObject(dataItem, key);
 
         if (isArray && Array.isArray(currentData)) {
-            currentData.forEach((item, index) => {
-                const newPrefix = `${prefix}[${index}]`;
-                processKeys(item, [...keys], newPrefix, result);
+            currentData.forEach((item, i) => {
+                processKeys(item, keys, index + 1, `${currentPrefix}[${i}]`);
             });
         } else if (!isArray && currentData !== undefined) {
-            processKeys(currentData, keys, prefix, result);
+            processKeys(currentData, keys, index + 1, currentPrefix);
         }
     }
 
     if (data && path.trim()) {
         const keys = path.split(".");
-        processKeys(data, keys, "", result);
+        processKeys(data, keys, 0, "");
     }
 
     return result;
 }
 
-export async function checkFilter(authorized, data, apikey, unauthorize) {
-    if (data.object.$filter && data.object.$filter.query) {
-        let key;
-        if (data.object.$filter.type == "object") key = "_id";
-        else if (data.object.$filter.type == "array") key = "name";
-        if (key) {
-            for (let value of authorized[apikey]) {
-                if (value[key]) value = value[key];
-                if (!data.object.$filter.query.$or)
-                    data.object.$filter.query.$or = [];
-                if (unauthorize)
-                    data.object.$filter.query.$or.push({
-                        [key]: { $ne: value }
-                    });
-                else
-                    data.object.$filter.query.$or.push({
-                        [key]: value
-                    });
-            }
-            if (!unauthorize) return true;
-        }
-    }
-}
-
-export function deleteKey(data, path) {
-    if (!data || !path) return;
-    if (path.includes("._id")) path = path.replace("._id", "");
-    data = dotNotationToObject({ [path]: undefined }, data);
-    return data;
-}
-
-// ==========================================
-// Bound API Assembly Object
-// ==========================================
-export default {
-    check,
-    updateAuthorization,
-    deleteAuthorization,
-    getAuthorization,
-    readAuthorization,
-    checkAuthorization,
-    checkMethod,
-    checkMethodMatch,
-    checkMethodOperators,
-    checkAuthorizationData,
-    applyFilter,
-    parsePermissions,
-    sanitizeData,
-    generateDotNotation,
-    checkFilter,
-    deleteKey
-};
+export default check;
