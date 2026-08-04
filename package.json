@@ -1,6 +1,6 @@
 {
   "name": "@cocreate/authorize",
-  "version": "1.20.0",
+  "version": "1.21.0",
   "description": "A secure, real-time multi-tenant authorization framework and permission evaluation engine featuring hierarchical dot-notation routing, dynamic query filter injection, and deep payload field sanitization.",
   "keywords": [
     "authorization",
