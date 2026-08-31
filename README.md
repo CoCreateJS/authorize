@@ -40,7 +40,7 @@ The engine reads specific evaluation tokens within your permission definitions t
 | **`$storage` / `$database`** | Intercepts validation cycles, checking incoming parameters explicitly against target database partitions. |
 | **`$array` / `$index`** | Scans collection array parameters dynamically to verify target indices or resource keys align with tenant scopes. |
 | **`$keys`** | Triggers the field-level data sanitization firewall, identifying fields allowed for reading/writing. |
-| **`$filter`** | Enforces row-level constraints by modifying the active request query with runtime operators. |
+| **`filter`** | Enforces row-level constraints by modifying the active request query with runtime operators. |
 
 ---
 
@@ -126,7 +126,7 @@ Outputs compiled configuration (Note: 'methods' is primary, 'actions' supported 
 2. **Deterministic Cache Evaluation:** `getAuthorization()` checks if the target `organization_id` profile exists in memory. If absent, it issues a database query through the CRUD gateway (`readAuthorization`) to pull both default configurations (`default: true`) and key-specific rules concurrently.
 3. **Role Expansion & Deep Merging:** The engine reads the fetched rules, maps associated arrays via `dotNotationToObject`, gathers any assigned structural roles (`roles`), and issues secondary pipelines to retrieve each role profile. It then executes deep-merging loops to fold role rules into a single authorization blueprint.
 4. **Hierarchical Action Mapping:** When validating actions via `checkMethod()`, the system checks `methods` (or legacy `actions`) and performs full string match scans. If missing, it systematically splits the action parameter across period boundaries (e.g., `stripe.customers.subscriptions.delete` → `stripe.customers.subscriptions` → `stripe.customers` → `stripe` → `*`), climbing up the matrix to find an applicable rule block.
-5. **Dynamic Filter Injection:** If rule evaluations match parameter queries, `applyFilter()` isolates operators like `$eq` or `$ne`. It automatically maps contextual criteria (such as shifting `$user_id` into the user's active session ID) and transforms the target query structure directly while backing up `data.$filter.original`.
+5. **Dynamic Filter Injection:** If rule evaluations match parameter queries, `applyFilter()` isolates operators like `$eq` or `$ne`. It automatically maps contextual criteria (such as shifting `$user_id` into the user's active session ID) and transforms the target query structure directly while backing up `data.filter.original`.
 6. **Payload Cleansing & Automatic Filter Restoration:** Fields pass through `parsePermissions()` to filter out restricted parameters via `sanitizeData()`. On pass 2 (outbound sanitization), `check()` automatically restores the original query filter before dispatch.
 
 ---
