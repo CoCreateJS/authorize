@@ -166,7 +166,7 @@ async function readAuthorization(key, data) {
             database: organization_id,
             array: "keys",
             organization_id,
-            $filter: {
+            filter: {
                 query: {
                     $or: key
                         ? [{ default: true }, { default: "true" }, { default: 1 }, { key }]
@@ -201,7 +201,7 @@ async function readAuthorization(key, data) {
                     .map((_id) => ({ _id }));
 
                 if (role_ids.length > 0) {
-                    delete request.$filter;
+                    delete request.filter;
                     delete request.isFilter;
                     request.object = role_ids;
 
@@ -234,7 +234,7 @@ async function readAuthorization(key, data) {
  */
 export async function check(data, user_id) {
     // Automatically restore original filter if present from a previous pass
-    if (data && data.$filter && data.$filter.original !== undefined) {
+    if (data && data.filter && data.filter.original !== undefined) {
         restoreFilter(data);
     }
 
@@ -487,7 +487,7 @@ function checkAuthorizationData(data, authorization, key) {
 
 /**
  * Appends query conditions to request payload filter object.
- * Preserves original query in data.$filter.original and wraps conditions safely in $and.
+ * Preserves original query in data.filter.original and wraps conditions safely in $and.
  * Replaces $user_id token with active session or user ID.
  */
 function applyFilter(data, authorization, authorizationKey) {
@@ -502,12 +502,12 @@ function applyFilter(data, authorization, authorizationKey) {
     ];
 
     if (supportedOperators.includes(operator)) {
-        if (!data.$filter) data.$filter = { query: {} };
-        if (!data.$filter.query) data.$filter.query = {};
+        if (!data.filter) data.filter = { query: {} };
+        if (!data.filter.query) data.filter.query = {};
 
         // Preserve client's original filter before applying security constraints
-        if (!data.$filter.original) {
-            data.$filter.original = JSON.parse(JSON.stringify(data.$filter.query));
+        if (!data.filter.original) {
+            data.filter.original = JSON.parse(JSON.stringify(data.filter.query));
         }
 
         let value = typeof authorization === "string" ? authorization : authorization[authorizationKey];
@@ -522,14 +522,14 @@ function applyFilter(data, authorization, authorizationKey) {
         const securityConstraint = { [key]: { [operator]: value } };
 
         // Wrap existing client query and security constraint together with top-level $and
-        if (Object.keys(data.$filter.query).length === 0) {
-            data.$filter.query = securityConstraint;
-        } else if (Array.isArray(data.$filter.query.$and)) {
-            data.$filter.query.$and.push(securityConstraint);
+        if (Object.keys(data.filter.query).length === 0) {
+            data.filter.query = securityConstraint;
+        } else if (Array.isArray(data.filter.query.$and)) {
+            data.filter.query.$and.push(securityConstraint);
         } else {
-            data.$filter.query = {
+            data.filter.query = {
                 $and: [
-                    data.$filter.query,
+                    data.filter.query,
                     securityConstraint
                 ]
             };
@@ -541,16 +541,16 @@ function applyFilter(data, authorization, authorizationKey) {
 }
 
 /**
- * Restores original client $filter.query from data.$filter.original backup.
+ * Restores original client filter.query from data.filter.original backup.
  * Internal helper automatically invoked at the start of check() on pass 2.
  *
  * @param {object} data - The request data object.
  * @returns {boolean} True if filter was restored, false otherwise.
  */
 function restoreFilter(data) {
-    if (data && data.$filter && data.$filter.original !== undefined) {
-        data.$filter.query = JSON.parse(JSON.stringify(data.$filter.original));
-        delete data.$filter.original;
+    if (data && data.filter && data.filter.original !== undefined) {
+        data.filter.query = JSON.parse(JSON.stringify(data.filter.original));
+        delete data.filter.original;
         return true;
     }
     return false;
