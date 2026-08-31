@@ -245,9 +245,7 @@ export async function check(data, user_id) {
     }
 
     if (!authorization || authorization.error) {
-        if (data.apikey) {
-            authorization = await checkAuthorization({ key: data.apikey, data });
-        }
+        authorization = await checkAuthorization({ key: data.apikey, data });
     }
 
     return authorization;
@@ -513,7 +511,7 @@ function applyFilter(data, authorization, authorizationKey) {
         }
 
         let value = typeof authorization === "string" ? authorization : authorization[authorizationKey];
-        
+
         // Resolve $user_id dynamically from socket session or request body
         if (value === "$user_id") {
             value = (data.socket && data.socket.user_id) || data.user_id;
