@@ -202,7 +202,6 @@ async function readAuthorization(key, data) {
 
                 if (role_ids.length > 0) {
                     delete request.filter;
-                    delete request.isFilter;
                     request.object = role_ids;
 
                     const rolesRes = await crud.send(request);
