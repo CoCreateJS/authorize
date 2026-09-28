@@ -163,7 +163,6 @@ async function readAuthorization(key, data) {
         const request = {
             method: "object.read",
             host,
-            database: organization_id,
             array: "keys",
             organization_id,
             filter: {
