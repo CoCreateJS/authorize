@@ -18,21 +18,6 @@
   "publishConfig": {
     "access": "public"
   },
-  "cocreate": {
-    "environment": [
-      "server"
-    ],
-    "interface": {
-      "schemaVersion": 1,
-      "summary": "A secure, real-time multi-tenant authorization framework and permission evaluation engine featuring hierarchical dot-notation routing, dynamic query filter injection, and deep payload field sanitization.",
-      "source": "src/index.js",
-      "api": {
-        "exports": [
-          "check"
-        ]
-      }
-    }
-  },
   "scripts": {
     "start": "webpack --config webpack.config.js",
     "build": "webpack --mode=production --config webpack.config.js",

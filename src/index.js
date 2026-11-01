@@ -26,6 +26,8 @@ const organizations = {};
  *
  * @param {any} value - Value to evaluate.
  * @returns {boolean|undefined} Explicit boolean or undefined if not a boolean literal.
+ * @private
+ * @environment server
  */
 function parseBoolean(value) {
     if (typeof value === "boolean") return value;
@@ -70,6 +72,8 @@ if (typeof window !== "undefined") {
  *
  * @param {object} data - The data object containing array, object, and organization_id.
  * @returns {Promise<void>}
+ * @private
+ * @environment server
  */
 async function updateAuthorization(data) {
     const { array, object, organization_id } = data;
@@ -98,6 +102,8 @@ async function updateAuthorization(data) {
  *
  * @param {object} data - The data object containing array, object, and organization_id.
  * @returns {Promise<void>}
+ * @private
+ * @environment server
  */
 async function deleteAuthorization(data) {
     const { array, object, organization_id } = data;
@@ -123,6 +129,8 @@ async function deleteAuthorization(data) {
  * @param {string} key - The authorization key (e.g., user ID or API key).
  * @param {object} data - The data object containing organization_id.
  * @returns {Promise<object>} A promise that resolves to the authorization details.
+ * @private
+ * @environment server
  */
 async function getAuthorization(key, data) {
     const { organization_id } = data;
@@ -154,6 +162,8 @@ async function getAuthorization(key, data) {
  * @param {string} key - The authorization key (e.g., user ID or API key).
  * @param {object} data - Request details containing organization_id and host.
  * @returns {Promise<object>}
+ * @private
+ * @environment server
  */
 async function readAuthorization(key, data) {
     try {
@@ -229,6 +239,8 @@ async function readAuthorization(key, data) {
  * @param {object} data - Request details including apikey and organization_id.
  * @param {string} user_id - The user ID for validation.
  * @returns {Promise<object|boolean>}
+ * @public
+ * @environment server
  */
 export async function check(data, user_id) {
     // Automatically restore original filter if present from a previous pass
@@ -256,6 +268,8 @@ export async function check(data, user_id) {
  * @param {string} params.key - Key used for authorization (user ID or API key).
  * @param {object} params.data - Request details.
  * @returns {Promise<object|boolean>}
+ * @private
+ * @environment server
  */
 async function checkAuthorization({ key, data }) {
     if (!data.organization_id) return { error: "organization_id is required" };
@@ -303,6 +317,8 @@ async function checkAuthorization({ key, data }) {
  * @param {object} authorized - Authorization methods tree.
  * @param {string} method - Method string (e.g. "stripe.customers.post" or "object.read").
  * @returns {Promise<boolean>}
+ * @private
+ * @environment server
  */
 async function checkMethod(data, authorized, method) {
     if (!authorized || typeof authorized !== "object") return false;
@@ -341,6 +357,8 @@ async function checkMethod(data, authorized, method) {
  * @param {boolean|string|number|object|Array} authorized - Permission rule definition.
  * @param {string} match - Current method match key.
  * @returns {Promise<boolean>}
+ * @private
+ * @environment server
  */
 async function checkMethodMatch(data, authorized, match) {
     // Evaluate explicit boolean/numeric/string booleans first
@@ -411,6 +429,8 @@ async function checkMethodMatch(data, authorized, match) {
 
 /**
  * Dynamic operator evaluation ($storage, $database, $array, $index).
+ * @private
+ * @environment server
  */
 async function checkMethodOperators(data, key, authorization) {
     try {
@@ -458,6 +478,8 @@ async function checkMethodOperators(data, key, authorization) {
 
 /**
  * Checks authorization rule match for a given key string/array/object.
+ * @private
+ * @environment server
  */
 function checkAuthorizationData(data, authorization, key) {
     if (typeof authorization === "string") {
@@ -487,6 +509,8 @@ function checkAuthorizationData(data, authorization, key) {
  * Appends query conditions to request payload filter object.
  * Preserves original query in data.filter.original and wraps conditions safely in $and.
  * Replaces $user_id token with active session or user ID.
+ * @private
+ * @environment server
  */
 function applyFilter(data, authorization, authorizationKey) {
     const keyParts = authorizationKey.split(".");
@@ -544,6 +568,8 @@ function applyFilter(data, authorization, authorizationKey) {
  *
  * @param {object} data - The request data object.
  * @returns {boolean} True if filter was restored, false otherwise.
+ * @private
+ * @environment server
  */
 function restoreFilter(data) {
     if (data && data.filter && data.filter.original !== undefined) {
@@ -557,6 +583,8 @@ function restoreFilter(data) {
 /**
  * Parses raw $keys permission entries into inclusion or exclusion lists.
  * Prioritizes inclusions over exclusions.
+ * @private
+ * @environment server
  */
 function parsePermissions(authorization) {
     const inclusion = [];
@@ -591,6 +619,8 @@ function parsePermissions(authorization) {
 
 /**
  * Sanitizes object/array payloads according to inclusion/exclusion permission rules.
+ * @private
+ * @environment server
  */
 function sanitizeData(data, inclusion, exclusion) {
     if (inclusion === null && exclusion === null) {
@@ -624,6 +654,8 @@ function sanitizeData(data, inclusion, exclusion) {
 
 /**
  * Extracts dot-notation paths from target data without mutating keys parameter.
+ * @private
+ * @environment server
  */
 function generateDotNotation(data, path, isExclusion = false) {
     if (typeof path !== "string") throw new Error("Path must be a string");
@@ -663,3 +695,10 @@ function generateDotNotation(data, path, isExclusion = false) {
 }
 
 export default { check };
+
+/**
+ * A secure, real-time multi-tenant authorization framework and permission evaluation engine featuring hierarchical dot-notation routing, dynamic query filter injection, and deep payload field sanitization.
+ *
+ * @module authorize
+ * @environment server
+ */
