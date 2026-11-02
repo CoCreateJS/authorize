@@ -1,3 +1,35 @@
+# [2.0.0](https://github.com/CoCreateJS/authorize/compare/v1.17.3...v2.0.0) (2026-11-02)
+
+
+### Bug Fixes
+
+* add Deno specific entries to .gitignore ([7d41cf0](https://github.com/CoCreateJS/authorize/commit/7d41cf0bfadf1754a8acfb8d5e80b402842696ba))
+* bump [@cocreate](https://github.com/cocreate) dependencies ([b830e89](https://github.com/CoCreateJS/authorize/commit/b830e895f6b3be017e58fe6da0653871c8e3d909))
+* bump versions ([d744211](https://github.com/CoCreateJS/authorize/commit/d744211fbb9bc77eecb5d71c31ff9aad85447fa5))
+* bump versions ([2e89359](https://github.com/CoCreateJS/authorize/commit/2e8935999dcbb694ee2def2b415131cbc5999027))
+* bumped dependencies ([2ad0cd5](https://github.com/CoCreateJS/authorize/commit/2ad0cd5bb8059402f7fb7998cc8ca9918132cddf))
+* export ([99641f8](https://github.com/CoCreateJS/authorize/commit/99641f810994be02613a5eda1afd93e977f105b0))
+* export defualt { check } ([e66c185](https://github.com/CoCreateJS/authorize/commit/e66c18589e41cff8b54e1bc25e4223455be7a8cc))
+* remove trailing slash from node_modules entry in .gitignore ([6c7a945](https://github.com/CoCreateJS/authorize/commit/6c7a945e51ab42b4b7cc12429db1b8f85ae83a95))
+* replace legacy $filter field with filter ([404cf19](https://github.com/CoCreateJS/authorize/commit/404cf19276b0cd8d4314c3b5ccdc1c996da64c9f))
+* update @cocreate/crud-server dependency version ([f9f6ec2](https://github.com/CoCreateJS/authorize/commit/f9f6ec28cca0db08cd75756aaed41aa839ebe082))
+* update git url ([f30a897](https://github.com/CoCreateJS/authorize/commit/f30a897bd3267a26c4f26ca02154c9727efb583b))
+* update GitHub Actions to use latest versions and sync package.json description ([ebf4ea9](https://github.com/CoCreateJS/authorize/commit/ebf4ea9f853196577bf3d33121c746c17392974e))
+
+
+### Features
+
+* align CoCreate repository and package naming ([c6de256](https://github.com/CoCreateJS/authorize/commit/c6de256a3caad8b32f84601a2db613db09736d27))
+* bump all dependencies ([95a1fa8](https://github.com/CoCreateJS/authorize/commit/95a1fa82e168d8eb263f3f30d8a0f3388e77b95f))
+* bumped all dependency versions ([ffa70ac](https://github.com/CoCreateJS/authorize/commit/ffa70ac5de64a8f7149d20bf3b787808de022de2))
+* Improved handling of $filter and user_id ([093b224](https://github.com/CoCreateJS/authorize/commit/093b224a86165778c208fb647ebf61c5d79dff06))
+* support for api and endpoints ([76436b8](https://github.com/CoCreateJS/authorize/commit/76436b8d1317e750f036a54086914eadb4c2558a))
+
+
+### BREAKING CHANGES
+
+* consumers must use the renamed CoCreate package and repository identities; the previous prefixed names are no longer supported.
+
 ## [1.17.3](https://github.com/CoCreateJS/CoCreate-authorize/compare/v1.17.2...v1.17.3) (2026-07-19)
 
 
