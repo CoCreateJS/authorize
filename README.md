@@ -216,7 +216,7 @@ if (inclusion.length > 0) {
 
 ## How to Contribute
 
-We encourage contribution to our libraries, please see our [CONTRIBUTING.md](https://github.com/CoCreateJS/CoCreate-authorize/blob/master/CONTRIBUTING.md) guide for details. If you encounter any bugs or wish to make feature requests, please submit an issue on our [GitHub Issues](https://github.com/CoCreateJS/CoCreate-authorize/issues) tracker.
+We encourage contribution to our libraries, please see our [CONTRIBUTING.md](https://github.com/CoCreateJS/authorize/blob/master/CONTRIBUTING.md) guide for details. If you encounter any bugs or wish to make feature requests, please submit an issue on our [GitHub Issues](https://github.com/CoCreateJS/authorize/issues) tracker.
 
 For broader system configurations and API guides, please visit our [CoCreate Authorization Documentation](https://cocreatejs.com/docs/authorize).
 
