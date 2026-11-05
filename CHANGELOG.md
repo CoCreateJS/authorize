@@ -1,3 +1,15 @@
+# [2.1.0](https://github.com/CoCreateJS/authorize/compare/v2.0.0...v2.1.0) (2026-11-05)
+
+
+### Bug Fixes
+
+* upgrade CoCreate dependencies to v2 ([17b027c](https://github.com/CoCreateJS/authorize/commit/17b027cafaaaab459765a19ea2c578e370ad6dd5))
+
+
+### Features
+
+* authorize scoped HTTP operations and endpoint grants ([cf4ab78](https://github.com/CoCreateJS/authorize/commit/cf4ab78b300b32b5125f2773811231c0e8320ccb))
+
 # [2.0.0](https://github.com/CoCreateJS/authorize/compare/v1.17.3...v2.0.0) (2026-11-02)
 
 
