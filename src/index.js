@@ -387,7 +387,7 @@ async function checkMethodMatch(data, authorized, match) {
     } else if (typeof authorized === "object" && authorized !== null) {
         for (const key of Object.keys(authorized)) {
             if (key.startsWith("$")) {
-                if (["$storage", "$database", "$array", "$index"].includes(key)) {
+                if (["$storage", "$database", "$array", "$index", "$endpoint"].includes(key)) {
                     const opStatus = await checkMethodOperators(data, key, authorized[key]);
                     if (typeof opStatus === "boolean") status = opStatus;
                 } else if (key === "$keys") {
@@ -428,7 +428,7 @@ async function checkMethodMatch(data, authorized, match) {
 }
 
 /**
- * Dynamic operator evaluation ($storage, $database, $array, $index).
+ * Dynamic operator evaluation ($storage, $database, $array, $index, $endpoint).
  * @private
  * @environment server
  */
@@ -694,7 +694,35 @@ function generateDotNotation(data, path, isExclusion = false) {
     return result;
 }
 
-export default { check };
+/**
+ * Authorizes an external operation and returns its sanitized execution envelope.
+ * Snapshots scope and operation targets before check(), which may mutate the input.
+ * Uses this service's check method when called as authorize.request().
+ *
+ * @param {object} data - Server-scoped request envelope, including any API key.
+ * @param {string} [user_id] - Authenticated user identity supplied by the caller.
+ * @returns {Promise<object>} Authorized envelope with the transport API key removed.
+ * @throws {Error} AUTHORIZATION_DENIED when permission or scope validation fails.
+ * @public
+ * @environment server
+ */
+export async function request(data, user_id) {
+    const fields = ['organization_id', 'host', 'method', 'api', 'endpoint', 'array'];
+    const expected = Object.fromEntries(fields.map(field => [field, data[field]]));
+    const permission = await (this?.check || check)(data, user_id);
+    const error = permission?.error;
+    const failed = Array.isArray(error) ? error.length > 0 : Boolean(error);
+    const authorized = permission === true ? data : permission?.authorized;
+    if (!permission || failed || !authorized || typeof authorized !== 'object' || Array.isArray(authorized) ||
+        fields.some(field => authorized[field] !== expected[field])) {
+        throw Object.assign(new Error('Operation is not authorized.'), { code: 'AUTHORIZATION_DENIED' });
+    }
+    const result = { ...authorized };
+    delete result.apikey;
+    return result;
+}
+
+export default { check, request };
 
 /**
  * A secure, real-time multi-tenant authorization framework and permission evaluation engine featuring hierarchical dot-notation routing, dynamic query filter injection, and deep payload field sanitization.

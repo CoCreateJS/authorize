@@ -225,3 +225,8 @@ For broader system configurations and API guides, please visit our [CoCreate Aut
 ## License
 
 This software is dual-licensed under the GNU Affero General Public License version 3 (AGPLv3) and a commercial license.
+## Authorized request helper
+
+`await authorize.request(envelope, user_id?)` calls the service's `check()` method and returns the sanitized execution envelope without its transport `apikey`. It snapshots organization, host, method, API, endpoint and array before checking, then rejects any changes to those targets, including in-place mutations. Denials and malformed authorization results throw an error with `code: 'AUTHORIZATION_DENIED'`; authorization service errors propagate to the caller.
+
+Modules own their entrances and decide when to call this helper after resolving resource context. Credential verification, HTTP parsing, webhook signature verification and trusted internal execution stay with their respective services. Existing `check()` behavior is unchanged.
