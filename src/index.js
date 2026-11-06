@@ -251,11 +251,11 @@ export async function check(data, user_id) {
     let authorization = false;
 
     if (user_id) {
-        authorization = await checkAuthorization({ key: user_id, data });
+        authorization = await checkAuthorization({ key: user_id, data, user_id });
     }
 
     if (!authorization || authorization.error) {
-        authorization = await checkAuthorization({ key: data.apikey, data });
+        authorization = await checkAuthorization({ key: data.apikey, data, user_id });
     }
 
     return authorization;
@@ -271,7 +271,7 @@ export async function check(data, user_id) {
  * @private
  * @environment server
  */
-async function checkAuthorization({ key, data }) {
+async function checkAuthorization({ key, data, user_id }) {
     if (!data.organization_id) return { error: "organization_id is required" };
     if (!data.method) return { error: "method is required" };
 
@@ -302,7 +302,7 @@ async function checkAuthorization({ key, data }) {
         return { error: "Authorization does not have any methods or actions defined" };
     }
 
-    const status = await checkMethod(data, methods, data.method);
+    const status = await checkMethod(data, methods, data.method, user_id);
     if (!status) return false;
 
     return { authorized: data };
@@ -320,13 +320,13 @@ async function checkAuthorization({ key, data }) {
  * @private
  * @environment server
  */
-async function checkMethod(data, authorized, method) {
+async function checkMethod(data, authorized, method, user_id) {
     if (!authorized || typeof authorized !== "object") return false;
 
     // 1. Direct match on exact path (handles both flat dot-notated keys and deep object paths)
     const directMatch = getValueFromObject(authorized, method) ?? authorized[method];
     if (directMatch !== undefined) {
-        return await checkMethodMatch(data, directMatch, method);
+        return await checkMethodMatch(data, directMatch, method, user_id);
     }
 
     // 2. Cascading match up dot-notation hierarchy (e.g. "stripe.customers.post" -> "stripe.customers" -> "stripe")
@@ -337,14 +337,14 @@ async function checkMethod(data, authorized, method) {
             const parentPath = parts.join(".");
             const parentMatch = getValueFromObject(authorized, parentPath) ?? authorized[parentPath];
             if (parentMatch !== undefined) {
-                return await checkMethodMatch(data, parentMatch, parentPath);
+                return await checkMethodMatch(data, parentMatch, parentPath, user_id);
             }
         }
     }
 
     // 3. Fallback to global wildcard "*"
     if (authorized["*"] !== undefined) {
-        return await checkMethodMatch(data, authorized["*"], "*");
+        return await checkMethodMatch(data, authorized["*"], "*", user_id);
     }
 
     return false;
@@ -360,7 +360,7 @@ async function checkMethod(data, authorized, method) {
  * @private
  * @environment server
  */
-async function checkMethodMatch(data, authorized, match) {
+async function checkMethodMatch(data, authorized, match, user_id) {
     // Evaluate explicit boolean/numeric/string booleans first
     const boolVal = parseBoolean(authorized);
     if (boolVal !== undefined) {
@@ -381,14 +381,14 @@ async function checkMethodMatch(data, authorized, match) {
 
     if (Array.isArray(authorized)) {
         for (const rule of authorized) {
-            const ruleStatus = await checkMethodMatch(data, rule, newmatch || match);
+            const ruleStatus = await checkMethodMatch(data, rule, newmatch || match, user_id);
             if (ruleStatus === true) status = true;
         }
     } else if (typeof authorized === "object" && authorized !== null) {
         for (const key of Object.keys(authorized)) {
             if (key.startsWith("$")) {
                 if (["$storage", "$database", "$array", "$index", "$endpoint"].includes(key)) {
-                    const opStatus = await checkMethodOperators(data, key, authorized[key]);
+                    const opStatus = await checkMethodOperators(data, key, authorized[key], user_id);
                     if (typeof opStatus === "boolean") status = opStatus;
                 } else if (key === "$keys") {
                     const type = data.method.split(".")[0];
@@ -396,7 +396,7 @@ async function checkMethodMatch(data, authorized, match) {
                         rawKeys.push(authorized[key]);
                     }
                 } else {
-                    const filterStatus = applyFilter(data, authorized[key], key);
+                    const filterStatus = applyFilter(data, authorized[key], key, user_id);
                     if (filterStatus) status = true;
                 }
             }
@@ -418,9 +418,9 @@ async function checkMethodMatch(data, authorized, match) {
     // Check nested fallback matches (* or exact remaining path)
     if (newmatch && !status && typeof authorized === "object" && authorized !== null) {
         if (authorized[newmatch] !== undefined) {
-            status = await checkMethodMatch(data, authorized[newmatch], newmatch);
+            status = await checkMethodMatch(data, authorized[newmatch], newmatch, user_id);
         } else if (authorized["*"] !== undefined) {
-            status = await checkMethodMatch(data, authorized["*"], newmatch);
+            status = await checkMethodMatch(data, authorized["*"], newmatch, user_id);
         }
     }
 
@@ -432,10 +432,10 @@ async function checkMethodMatch(data, authorized, match) {
  * @private
  * @environment server
  */
-async function checkMethodOperators(data, key, authorization) {
+async function checkMethodOperators(data, key, authorization, user_id) {
     try {
         if (authorization === "$user_id") {
-            authorization = (data.socket && data.socket.user_id) || data.user_id;
+            authorization = user_id;
             if (!authorization) return false;
         }
 
@@ -445,7 +445,7 @@ async function checkMethodOperators(data, key, authorization) {
             if (!data[type]) return undefined;
 
             if (typeof data[type] === "string") {
-                return checkAuthorizationData(data, authorization, data[type]);
+                return checkAuthorizationData(data, authorization, data[type], user_id);
             }
 
             if (Array.isArray(data[type])) {
@@ -457,7 +457,7 @@ async function checkMethodOperators(data, key, authorization) {
                         ? data[type][i].name
                         : data[type][i];
 
-                    const authResult = checkAuthorizationData(data, authorization, itemData);
+                    const authResult = checkAuthorizationData(data, authorization, itemData, user_id);
                     if (authResult === false) return false;
                     if (authResult === undefined) allAuthorized = undefined;
                 }
@@ -465,7 +465,7 @@ async function checkMethodOperators(data, key, authorization) {
             }
 
             if (typeof data[type] === "object" && data[type] !== null) {
-                return checkAuthorizationData(data, authorization, data[type].name);
+                return checkAuthorizationData(data, authorization, data[type].name, user_id);
             }
         }
 
@@ -481,7 +481,7 @@ async function checkMethodOperators(data, key, authorization) {
  * @private
  * @environment server
  */
-function checkAuthorizationData(data, authorization, key) {
+function checkAuthorizationData(data, authorization, key, user_id) {
     if (typeof authorization === "string") {
         return key === authorization ? true : undefined;
     }
@@ -493,7 +493,7 @@ function checkAuthorizationData(data, authorization, key) {
     if (typeof authorization === "object" && authorization !== null) {
         if (typeof authorization[key] === "object" && authorization[key] !== null) {
             for (const queryKey of Object.keys(authorization[key])) {
-                return applyFilter(data, authorization[key], queryKey);
+                return applyFilter(data, authorization[key], queryKey, user_id);
             }
         }
 
@@ -512,7 +512,7 @@ function checkAuthorizationData(data, authorization, key) {
  * @private
  * @environment server
  */
-function applyFilter(data, authorization, authorizationKey) {
+function applyFilter(data, authorization, authorizationKey, user_id) {
     const keyParts = authorizationKey.split(".");
     const operator = keyParts.pop();
     const key = keyParts.join(".");
@@ -534,9 +534,9 @@ function applyFilter(data, authorization, authorizationKey) {
 
         let value = typeof authorization === "string" ? authorization : authorization[authorizationKey];
 
-        // Resolve $user_id dynamically from socket session or request body
+        // Resolve $user_id from the authenticated principal supplied by the caller.
         if (value === "$user_id") {
-            value = (data.socket && data.socket.user_id) || data.user_id;
+            value = user_id;
             // Prevent unauthenticated undefined tokens from matching undefined fields
             if (!value) return false;
         }
