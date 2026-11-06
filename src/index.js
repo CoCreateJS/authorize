@@ -60,7 +60,7 @@ if (typeof window !== "undefined") {
             // Safely route deletes vs updates to maintain precise cache sync
             if (data.method === "object.delete") {
                 deleteAuthorization(data);
-            } else {
+            } else if (data.method === "object.create" || data.method === "object.update") {
                 updateAuthorization(data);
             }
         });

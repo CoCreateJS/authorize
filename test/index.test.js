@@ -75,3 +75,24 @@ test('unauthenticated requests cannot use a supplied data user ID for $user_id r
 
     assert.equal(result, false);
 });
+
+test('cache refresh ignores reads and refreshes once after a key mutation', async t => {
+    let reads = 0;
+    const key = 'cached-event-user';
+    t.mock.method(crud, 'send', async () => {
+        reads++;
+        return { object: [{ key, organization_id: 'event-org', admin: true }] };
+    });
+    assert.equal(await check({ method: 'object.read', organization_id: 'event-org' }, key), true);
+    assert.equal(reads, 1);
+    process.emit('crud-event', {
+        method: 'object.read', array: 'keys', organization_id: 'event-org', object: [{ key }]
+    });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(reads, 1);
+    process.emit('crud-event', {
+        method: 'object.update', array: 'keys', organization_id: 'event-org', object: [{ key }]
+    });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(reads, 2);
+});
