@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import crud from '@cocreate/crud-server';
+import { crudServer } from '@cocreate/crud';
 import { check } from '../src/index.js';
 
 function authorizationDocument(key) {
@@ -14,7 +14,7 @@ function authorizationDocument(key) {
 }
 
 test('user ID rules use the trusted check argument without data.socket', async t => {
-    t.mock.method(crud, 'send', async request => ({
+    t.mock.method(crudServer, 'send', async request => ({
         object: [authorizationDocument(request.filter.query.$or[1]?.key || 'trusted-user')]
     }));
 
@@ -32,7 +32,7 @@ test('user ID rules use the trusted check argument without data.socket', async t
 });
 
 test('nested $user_id filters use the trusted check argument without changing data.user_id', async t => {
-    t.mock.method(crud, 'send', async request => ({
+    t.mock.method(crudServer, 'send', async request => ({
         object: [{
             key: 'trusted-filter-user',
             organization_id: 'org',

@@ -16,7 +16,8 @@
  ********************************************************************************/
 
 import { getValueFromObject, dotNotationToObject } from "@cocreate/utils";
-import crud from "@cocreate/crud-server";
+import { crudClient } from "@cocreate/crud/client";
+import { crudServer } from "@cocreate/crud/server";
 
 const organizations = {};
 
@@ -45,12 +46,12 @@ function parseBoolean(value) {
 }
 
 if (typeof window !== "undefined") {
-    if (crud && typeof crud.listen === "function") {
-        crud.listen("object.update", (data) => {
+    if (crudClient && typeof crudClient.listen === "function") {
+        crudClient.listen("object.update", (data) => {
             updateAuthorization(data);
         });
 
-        crud.listen("object.delete", (data) => {
+        crudClient.listen("object.delete", (data) => {
             deleteAuthorization(data);
         });
     }
@@ -185,7 +186,7 @@ async function readAuthorization(key, data) {
             }
         };
 
-        const authRes = await crud.send(request);
+        const authRes = await crudServer.send(request);
 
         if (authRes && Array.isArray(authRes.object) && authRes.object.length) {
             const objs = authRes.object;
@@ -213,7 +214,7 @@ async function readAuthorization(key, data) {
                     delete request.filter;
                     request.object = role_ids;
 
-                    const rolesRes = await crud.send(request);
+                    const rolesRes = await crudServer.send(request);
                     const roles = (rolesRes && rolesRes.object) || [];
 
                     for (const role of roles) {
