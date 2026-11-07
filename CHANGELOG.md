@@ -1,3 +1,11 @@
+## [2.1.1](https://github.com/CoCreateJS/authorize/compare/v2.1.0...v2.1.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* resolve user rules from trusted identity ([6a2dd62](https://github.com/CoCreateJS/authorize/commit/6a2dd6234e9c4452dd1d6a5121e2d98c48001ce5))
+* route authorization responses through server send ([88a71f5](https://github.com/CoCreateJS/authorize/commit/88a71f5a9a2a90d026ed6b8e0e1e2942dbb20c49))
+
 # [2.1.0](https://github.com/CoCreateJS/authorize/compare/v2.0.0...v2.1.0) (2026-11-05)
 
 
