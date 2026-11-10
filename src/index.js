@@ -285,6 +285,11 @@ async function checkAuthorization({ key, data, user_id }) {
         return false;
     }
 
+    // A managed key may act only for its assigned tenant, within platform scope.
+    if (authorized.managedOrganization && authorized.managedOrganization !== data.managedOrganization) {
+        return false;
+    }
+
     // Validate host restriction list
     if (Array.isArray(authorized.host) && authorized.host.length > 0) {
         const isAllowedHost =
@@ -708,7 +713,7 @@ function generateDotNotation(data, path, isExclusion = false) {
  * @environment server
  */
 export async function request(data, user_id) {
-    const fields = ['organization_id', 'host', 'method', 'api', 'endpoint', 'array'];
+    const fields = ['organization_id', 'host', 'managedOrganization', 'method', 'api', 'endpoint', 'array'];
     const expected = Object.fromEntries(fields.map(field => [field, data[field]]));
     const permission = await (this?.check || check)(data, user_id);
     const error = permission?.error;
