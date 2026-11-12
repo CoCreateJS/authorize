@@ -61,7 +61,7 @@ test('nested $user_id filters use the trusted check argument without changing da
 });
 
 test('unauthenticated requests cannot use a supplied data user ID for $user_id rules', async t => {
-    t.mock.method(crud, 'send', async request => ({
+    t.mock.method(crudServer, 'send', async request => ({
         object: [authorizationDocument(request.filter.query.$or[1]?.key || 'api-key')]
     }));
 
@@ -79,7 +79,7 @@ test('unauthenticated requests cannot use a supplied data user ID for $user_id r
 test('cache refresh ignores reads and refreshes once after a key mutation', async t => {
     let reads = 0;
     const key = 'cached-event-user';
-    t.mock.method(crud, 'send', async () => {
+    t.mock.method(crudServer, 'send', async () => {
         reads++;
         return { object: [{ key, organization_id: 'event-org', admin: true }] };
     });

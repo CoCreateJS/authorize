@@ -181,8 +181,7 @@ async function readAuthorization(key, data) {
                     $or: key
                         ? [{ default: true }, { default: "true" }, { default: 1 }, { key }]
                         : [{ default: true }, { default: "true" }, { default: 1 }]
-                },
-                limit: 2
+                }
             }
         };
 
@@ -190,15 +189,18 @@ async function readAuthorization(key, data) {
 
         if (authRes && Array.isArray(authRes.object) && authRes.object.length) {
             const objs = authRes.object;
-            const defaultDoc = objs.find((o) => o && parseBoolean(o.default) === true) || {};
+            const defaultDocs = objs.filter((o) => o && parseBoolean(o.default) === true);
             const keyDoc = key ? objs.find((o) => o && o.key === key) : undefined;
 
-            const expandedDefault = dotNotationToObject({}, defaultDoc);
-            const expandedKey = keyDoc ? dotNotationToObject({}, keyDoc) : {};
-            let authorization = dotNotationToObject(expandedDefault, expandedKey);
+            // Preserve the existing override order: configured defaults overlay
+            // the supplied key. Every matching default participates in the merge.
+            let authorization = dotNotationToObject(keyDoc || {}, {});
+            for (const defaultDoc of defaultDocs) {
+                authorization = dotNotationToObject(defaultDoc, authorization);
+            }
 
-            // Set unique roles combination
-            const defaultRoles = defaultDoc.roles || [];
+            // Include roles from every default as well as the supplied key.
+            const defaultRoles = defaultDocs.flatMap((doc) => doc.roles || []);
             const keyRoles = (keyDoc && keyDoc.roles) || [];
             authorization.roles = Array.from(new Set([...defaultRoles, ...keyRoles]));
 

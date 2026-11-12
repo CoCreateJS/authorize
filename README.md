@@ -230,3 +230,11 @@ This software is dual-licensed under the GNU Affero General Public License versi
 `await authorize.request(envelope, user_id?)` calls the service's `check()` method and returns the sanitized execution envelope without its transport `apikey`. It snapshots organization, host, method, API, endpoint and array before checking, then rejects any changes to those targets, including in-place mutations. Denials and malformed authorization results throw an error with `code: 'AUTHORIZATION_DENIED'`; authorization service errors propagate to the caller.
 
 Modules own their entrances and decide when to call this helper after resolving resource context. Credential verification, HTTP parsing, webhook signature verification and trusted internal execution stay with their respective services. Existing `check()` behavior is unchanged.
+
+
+Authorization reads all matching default keys and the supplied key without a
+result limit. Every default contributes to the existing configuration merge;
+roles from every default and the supplied key are deduplicated before lookup.
+Explicit values continue to override normally, including `admin: false`. Omit
+`admin` from defaults unless the override is intended; non-admin access does not
+require an explicit false value.
